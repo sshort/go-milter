@@ -16,7 +16,13 @@ import (
 //
 // Note: Not exported as we might want to support multiple versions
 // transparently in the future.
-const clientProtocolVersion uint32 = 6
+const defaultClientProtocolVersion uint32 = 6
+const v6ProtocolOptionMask =
+
+// The milter we are talking too may support a lower protocol level than this client. The
+// client will support dropping down to version 2.
+var supportedProtocolVersions = map[uint32]bool{2: true, 6: true}
+var negotiatedProtocolVersion = defaultClientProtocolVersion
 
 // Client is a wrapper for managing milter connections.
 //
@@ -124,7 +130,7 @@ func (s *ClientSession) negotiate(actionMask OptAction, protoMask OptProtocol) e
 		Code: byte(CodeOptNeg), // TODO(foxcpp): Get rid of casts by changing msg.Code to have Code type
 		Data: make([]byte, 4*3),
 	}
-	binary.BigEndian.PutUint32(msg.Data, clientProtocolVersion)
+	binary.BigEndian.PutUint32(msg.Data, defaultClientProtocolVersion)
 	binary.BigEndian.PutUint32(msg.Data[4:], uint32(actionMask))
 	binary.BigEndian.PutUint32(msg.Data[8:], uint32(protoMask))
 
@@ -141,11 +147,12 @@ func (s *ClientSession) negotiate(actionMask OptAction, protoMask OptProtocol) e
 	if len(msg.Data) < 4*3 /* version + action mask + proto mask */ {
 		return fmt.Errorf("milter: negotiate: unexpected data size: %v", len(msg.Data))
 	}
-	milterVersion := binary.BigEndian.Uint32(msg.Data[:4])
 
-	// Not a strict comparison since we might be able to work correctly with
-	// milter using a newer protocol as long as masks negotiated are meaningful.
-	if milterVersion < clientProtocolVersion {
+	// Check the server protocol version against our map of supporeted versions
+	milterVersion := binary.BigEndian.Uint32(msg.Data[:4])
+	if _, ok := supportedProtocolVersions[milterVersion]; ok {
+		negotiatedProtocolVersion = milterVersion
+	} else {
 		return fmt.Errorf("milter: negotiate: unsupported protocol version: %v", milterVersion)
 	}
 
@@ -155,6 +162,11 @@ func (s *ClientSession) negotiate(actionMask OptAction, protoMask OptProtocol) e
 	s.ProtocolOpts = OptProtocol(milterProtoMask)
 
 	s.needAbort = true
+
+	// Downgrade protocol options. Current only support downgrade to v2
+	if negotiatedProtocolVersion == 2 {
+		s.ProtocolOpts
+	}
 
 	return nil
 }
