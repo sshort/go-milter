@@ -17,7 +17,8 @@ import (
 // Note: Not exported as we might want to support multiple versions
 // transparently in the future.
 const defaultClientProtocolVersion uint32 = 6
-const v6ProtocolOptionMask =
+const v2ActionOptionMask = 	OptAddHeader | OptChangeBody | OptAddRcpt | OptRemoveRcpt | OptChangeHeader | OptQuarantine
+const v2ProtocolOptionMask = OptNoConnect | OptNoHelo | OptNoMailFrom | OptNoRcptTo | OptNoBody | OptNoHeaders | OptNoEOH | OptNoUnknown | OptNoData | OptNoHeaderReply
 
 // The milter we are talking too may support a lower protocol level than this client. The
 // client will support dropping down to version 2.
@@ -165,7 +166,8 @@ func (s *ClientSession) negotiate(actionMask OptAction, protoMask OptProtocol) e
 
 	// Downgrade protocol options. Current only support downgrade to v2
 	if negotiatedProtocolVersion == 2 {
-		s.ProtocolOpts
+		s.ActionOpts = s.ActionOpts & v2ActionOptionMask
+		s.ProtocolOpts = s.ProtocolOpts & v2ProtocolOptionMask
 	}
 
 	return nil
